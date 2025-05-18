@@ -1,156 +1,159 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Q&A App</title>
-  <style>
-    body { font-family: sans-serif; padding: 1rem; max-width: 700px; margin: auto; }
-    h1 { text-align: center; }
-    .qa-card { border: 1px solid #ccc; border-radius: 8px; padding: 10px; margin-bottom: 10px; }
-    .qa-card button { margin-left: 10px; }
-    textarea, input { width: 100%; margin: 5px 0; padding: 5px; }
-    .btn { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; margin: 5px 0; }
-    .btn-save { background: #28a745; color: white; }
-    .btn-load { background: #007bff; color: white; }
-    .btn-copy { background: #ffc107; color: black; float: right; }
-    .btn-delete { background: #dc3545; color: white; float: right; }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Q&A App with GitHub Sync & Clipboard</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 20px; }
+  input, textarea { width: 100%; margin-bottom: 8px; padding: 8px; }
+  button { margin: 4px 0; }
+  .qa-item { border: 1px solid #ccc; padding: 8px; margin-bottom: 8px; }
+  .answer { white-space: pre-wrap; background: #f9f9f9; padding: 6px; }
+</style>
 </head>
 <body>
-  <h1>Q&A Manager</h1>
 
-  <div>
-    <input id="question" placeholder="Enter question" />
-    <textarea id="answer" placeholder="Enter answer"></textarea>
-    <button class="btn btn-save" onclick="addQA()">Add Q&A</button>
-    <button class="btn btn-load" onclick="loadFromGitHub()">Load from GitHub</button>
-    <button class="btn btn-load" onclick="saveToGitHub()">Save to GitHub</button>
-  </div>
+<h1>Q&A App</h1>
 
-  <hr />
+<label>GitHub Token: <input type="password" id="tokenInput" placeholder="Paste your GitHub token" /></label>
+<button id="saveTokenBtn">Save Token</button>
 
-  <div id="qa-list"></div>
+<hr />
 
-  <hr />
-  <div>
-    <input id="token" placeholder="Paste GitHub Token (saved locally)" />
-    <button class="btn btn-load" onclick="saveToken()">Save Token</button>
-  </div>
+<h2>Add Q&A</h2>
+<input id="questionInput" placeholder="Question" />
+<textarea id="answerInput" rows="3" placeholder="Answer"></textarea>
+<button id="addQAButton">Add Q&A</button>
+
+<hr />
+
+<h2>Q&A List</h2>
+<div id="qaList"></div>
+
+<hr />
+
+<button id="loadBtn">Load from GitHub</button>
+<button id="saveBtn">Save to GitHub</button>
 
 <script>
-const REPO = "keb2003/qna-app";
-const FILE_PATH = "qa_data.json";
-const API_URL = `https://api.github.com/repos/${REPO}/contents/${FILE_PATH}`;
+const OWNER = 'keb2003';
+const REPO = 'qna-app';
+const FILE_PATH = 'qa_data.json';
+const API_URL = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE_PATH}`;
 
-let qaData = JSON.parse(localStorage.getItem("qaData") || "{}");
+let qaData = {};
+let currentSha = null;
 
-function saveToken() {
-  const token = document.getElementById("token").value;
-  localStorage.setItem("githubToken", token);
-  alert("Token saved in browser.");
-}
-
-function renderList() {
-  const container = document.getElementById("qa-list");
-  container.innerHTML = "";
-  Object.entries(qaData).forEach(([q, a]) => {
-    const card = document.createElement("div");
-    card.className = "qa-card";
-    card.innerHTML = `
-      <b>${q}</b>
-      <button class="btn btn-copy" onclick="copyText(\`${a.replace(/`/g, '\`')}\`)">Copy Answer</button>
-      <button class="btn btn-delete" onclick="deleteQA(\`${q.replace(/`/g, '\`')}\`)">Delete</button>
-      <pre>${a}</pre>
+function renderQA() {
+  const container = document.getElementById('qaList');
+  container.innerHTML = '';
+  for (const q in qaData) {
+    const div = document.createElement('div');
+    div.className = 'qa-item';
+    div.innerHTML = `
+      <strong>Q:</strong> ${q} <br/>
+      <strong>A:</strong> <pre class="answer">${qaData[q]}</pre>
+      <button class="copyBtn">Copy Answer</button>
+      <button class="deleteBtn">Delete</button>
     `;
-    container.appendChild(card);
-  });
+    // Copy button
+    div.querySelector('.copyBtn').onclick = () => {
+      navigator.clipboard.writeText(qaData[q]).then(() => {
+        alert('Answer copied to clipboard!');
+      });
+    };
+    // Delete button
+    div.querySelector('.deleteBtn').onclick = () => {
+      if (confirm('Delete this Q&A?')) {
+        delete qaData[q];
+        renderQA();
+      }
+    };
+    container.appendChild(div);
+  }
 }
 
-function addQA() {
-  const q = document.getElementById("question").value.trim();
-  const a = document.getElementById("answer").value.trim();
-  if (!q || !a) return alert("Please enter both question and answer.");
+document.getElementById('saveTokenBtn').onclick = () => {
+  const token = document.getElementById('tokenInput').value.trim();
+  if (token) {
+    localStorage.setItem('githubToken', token);
+    alert('Token saved!');
+  } else {
+    alert('Please enter a token.');
+  }
+};
+
+document.getElementById('addQAButton').onclick = () => {
+  const q = document.getElementById('questionInput').value.trim();
+  const a = document.getElementById('answerInput').value.trim();
+  if (!q || !a) {
+    alert('Please enter both question and answer.');
+    return;
+  }
   qaData[q] = a;
-  localStorage.setItem("qaData", JSON.stringify(qaData));
-  document.getElementById("question").value = "";
-  document.getElementById("answer").value = "";
-  renderList();
-}
+  document.getElementById('questionInput').value = '';
+  document.getElementById('answerInput').value = '';
+  renderQA();
+};
 
-function deleteQA(q) {
-  delete qaData[q];
-  localStorage.setItem("qaData", JSON.stringify(qaData));
-  renderList();
-}
-
-function copyText(txt) {
-  navigator.clipboard.writeText(txt);
-  alert("Copied to clipboard!");
-}
-
-async function loadFromGitHub() {
-  const res = await fetch(`https://raw.githubusercontent.com/${REPO}/main/${FILE_PATH}`);
-  const data = await res.json();
-  qaData = data;
-  localStorage.setItem("qaData", JSON.stringify(qaData));
-  renderList();
-}
-
-async function saveToGitHub() {
-  const token = localStorage.getItem("githubToken");
-  if (!token) return alert("Please save your GitHub token first.");
+document.getElementById('loadBtn').onclick = async () => {
+  const token = localStorage.getItem('githubToken');
+  if (!token) return alert('Save your GitHub token first.');
 
   try {
-    let sha = null;
-    // Try to get existing file's sha
-    const getRes = await fetch(API_URL, {
+    const res = await fetch(API_URL, {
       headers: { Authorization: `Bearer ${token}` },
     });
+    if (!res.ok) throw new Error('Failed to load file from GitHub');
 
-    if (getRes.ok) {
-      const getJson = await getRes.json();
-      sha = getJson.sha;
-    } else if (getRes.status !== 404) {
-      // If not 404, something else went wrong
-      throw new Error(`Failed to get file info: ${getRes.status} ${getRes.statusText}`);
-    }
-    
-    // Prepare content in base64
+    const data = await res.json();
+    currentSha = data.sha;
+    const content = atob(data.content);
+    qaData = JSON.parse(content);
+    renderQA();
+    alert('Loaded from GitHub!');
+  } catch (err) {
+    alert(err.message);
+  }
+};
+
+document.getElementById('saveBtn').onclick = async () => {
+  const token = localStorage.getItem('githubToken');
+  if (!token) return alert('Save your GitHub token first.');
+
+  try {
     const contentBase64 = btoa(unescape(encodeURIComponent(JSON.stringify(qaData, null, 2))));
-
-    // Prepare request body
     const body = {
-      message: "Update Q&A",
+      message: 'Update Q&A',
       content: contentBase64,
+      sha: currentSha,
     };
-    if (sha) {
-      body.sha = sha; // Only add sha if file exists
-    }
 
-    // PUT request to create/update the file
     const res = await fetch(API_URL, {
-      method: "PUT",
+      method: 'PUT',
       headers: {
         Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify(body),
     });
 
-    if (res.ok) {
-      alert("Saved to GitHub!");
-    } else {
-      const errorText = await res.text();
-      alert("Error saving to GitHub: " + errorText);
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error('GitHub save failed: ' + text);
     }
+
+    const resData = await res.json();
+    currentSha = resData.content.sha;
+    alert('Saved to GitHub!');
   } catch (err) {
-    alert("Error saving to GitHub: " + err.message);
+    alert(err.message);
   }
-}
+};
 
-
-renderList();
+renderQA();
 </script>
+
 </body>
 </html>
