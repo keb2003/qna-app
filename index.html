@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Q&A App</title>
+  <style>
+    body { font-family: sans-serif; padding: 1rem; max-width: 700px; margin: auto; }
+    h1 { text-align: center; }
+    .qa-card { border: 1px solid #ccc; border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+    .qa-card button { margin-left: 10px; }
+    textarea, input { width: 100%; margin: 5px 0; padding: 5px; }
+    .btn { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; margin: 5px 0; }
+    .btn-save { background: #28a745; color: white; }
+    .btn-load { background: #007bff; color: white; }
+    .btn-copy { background: #ffc107; color: black; float: right; }
+    .btn-delete { background: #dc3545; color: white; float: right; }
+  </style>
+</head>
+<body>
+  <h1>Q&A Manager</h1>
+
+  <div>
+    <input id="question" placeholder="Enter question" />
+    <textarea id="answer" placeholder="Enter answer"></textarea>
+    <button class="btn btn-save" onclick="addQA()">Add Q&A</button>
+    <button class="btn btn-load" onclick="loadFromGitHub()">Load from GitHub</button>
+    <button class="btn btn-load" onclick="saveToGitHub()">Save to GitHub</button>
+  </div>
+
+  <hr />
+
+  <div id="qa-list"></div>
+
+  <hr />
+  <div>
+    <input id="token" placeholder="Paste GitHub Token (saved locally)" />
+    <button class="btn btn-load" onclick="saveToken()">Save Token</button>
+  </div>
+
+<script>
+const REPO = "keb2003/qna-app";
+const FILE_PATH = "qa_data.json";
+const API_URL = `https://api.github.com/repos/${REPO}/contents/${FILE_PATH}`;
+
+let qaData = JSON.parse(localStorage.getItem("qaData") || "{}");
+
+function saveToken() {
+  const token = document.getElementById("token").value;
+  localStorage.setItem("githubToken", token);
+  alert("Token saved in browser.");
+}
+
+function renderList() {
+  const container = document.getElementById("qa-list");
+  container.innerHTML = "";
+  Object.entries(qaData).forEach(([q, a]) => {
+    const card = document.createElement("div");
+    card.className = "qa-card";
+    card.innerHTML = `
+      <b>${q}</b>
+      <button class="btn btn-copy" onclick="copyText(\`${a.replace(/`/g, '\`')}\`)">Copy Answer</button>
+      <button class="btn btn-delete" onclick="deleteQA(\`${q.replace(/`/g, '\`')}\`)">Delete</button>
+      <pre>${a}</pre>
+    `;
+    container.appendChild(card);
+  });
+}
+
+function addQA() {
+  const q = document.getElementById("question").value.trim();
+  const a = document.getElementById("answer").value.trim();
+  if (!q || !a) return alert("Please enter both question and answer.");
+  qaData[q] = a;
+  localStorage.setItem("qaData", JSON.stringify(qaData));
+  document.getElementById("question").value = "";
+  document.getElementById("answer").value = "";
+  renderList();
+}
+
+function deleteQA(q) {
+  delete qaData[q];
+  localStorage.setItem("qaData", JSON.stringify(qaData));
+  renderList();
+}
+
+function copyText(txt) {
+  navigator.clipboard.writeText(txt);
+  alert("Copied to clipboard!");
+}
+
+async function loadFromGitHub() {
+  const res = await fetch(`https://raw.githubusercontent.com/${REPO}/main/${FILE_PATH}`);
+  const data = await res.json();
+  qaData = data;
+  localStorage.setItem("qaData", JSON.stringify(qaData));
+  renderList();
+}
+
+async function saveToGitHub() {
+  const token = localStorage.getItem("githubToken");
+  if (!token) return alert("Please save your GitHub token first.");
+
+  const getRes = await fetch(API_URL, { headers: { Authorization: `Bearer ${token}` } });
+  const { sha } = await getRes.json();
+
+  const res = await fetch(API_URL, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      message: "Update Q&A",
+      content: btoa(unescape(encodeURIComponent(JSON.stringify(qaData, null, 2)))),
+      sha
+    })
+  });
+
+  if (res.ok) alert("Saved to GitHub!");
+  else alert("Error saving to GitHub");
+}
+
+renderList();
+</script>
+</body>
+</html>
