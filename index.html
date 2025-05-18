@@ -101,25 +101,54 @@ async function saveToGitHub() {
   const token = localStorage.getItem("githubToken");
   if (!token) return alert("Please save your GitHub token first.");
 
-  const getRes = await fetch(API_URL, { headers: { Authorization: `Bearer ${token}` } });
-  const { sha } = await getRes.json();
+  try {
+    let sha = null;
+    // Try to get existing file's sha
+    const getRes = await fetch(API_URL, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
 
-  const res = await fetch(API_URL, {
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
+    if (getRes.ok) {
+      const getJson = await getRes.json();
+      sha = getJson.sha;
+    } else if (getRes.status !== 404) {
+      // If not 404, something else went wrong
+      throw new Error(`Failed to get file info: ${getRes.status} ${getRes.statusText}`);
+    }
+    
+    // Prepare content in base64
+    const contentBase64 = btoa(unescape(encodeURIComponent(JSON.stringify(qaData, null, 2))));
+
+    // Prepare request body
+    const body = {
       message: "Update Q&A",
-      content: btoa(unescape(encodeURIComponent(JSON.stringify(qaData, null, 2)))),
-      sha
-    })
-  });
+      content: contentBase64,
+    };
+    if (sha) {
+      body.sha = sha; // Only add sha if file exists
+    }
 
-  if (res.ok) alert("Saved to GitHub!");
-  else alert("Error saving to GitHub");
+    // PUT request to create/update the file
+    const res = await fetch(API_URL, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (res.ok) {
+      alert("Saved to GitHub!");
+    } else {
+      const errorText = await res.text();
+      alert("Error saving to GitHub: " + errorText);
+    }
+  } catch (err) {
+    alert("Error saving to GitHub: " + err.message);
+  }
 }
+
 
 renderList();
 </script>
